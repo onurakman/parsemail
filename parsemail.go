@@ -21,6 +21,8 @@ const contentTypeTextHtml = "text/html"
 const contentTypeTextPlain = "text/plain"
 const contentTypeEncapsulatedMessage = "message/rfc822"
 const contentTypeOctetStream = "application/octet-stream"
+const contentTypeMultipartSigned = "multipart/signed"
+const contentAttachment = "attachment"
 
 // Parse an email message read from io.Reader into parsemail.Email struct
 func Parse(r io.Reader) (email Email, err error) {
@@ -47,6 +49,8 @@ func Parse(r io.Reader) (email Email, err error) {
 		email.TextBody, email.HTMLBody, email.EmbeddedFiles, err = parseMultipartAlternative(msg.Body, params["boundary"])
 	case contentTypeMultipartRelated:
 		email.TextBody, email.HTMLBody, email.EmbeddedFiles, err = parseMultipartRelated(msg.Body, params["boundary"])
+	case contentTypeMultipartSigned:
+		email.TextBody, email.HTMLBody, email.Attachments, email.EmbeddedFiles, email.EmbeddedEmails, err = parseMultipartSigned(msg.Body, params["boundary"])
 	case contentTypeTextPlain:
 		message, _ := ioutil.ReadAll(msg.Body)
 		var reader io.Reader
@@ -294,6 +298,7 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 	for {
 		part, err := mr.NextPart()
 		if err == io.EOF {
+			err = nil
 			break
 		} else if err != nil {
 			return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
@@ -350,9 +355,67 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 			}
 			embeddedEmails = append(embeddedEmails, email)
+		case isAttachmentAsString(contentType, part):
+			at, err := decodeAttachment(part)
+			if err != nil {
+				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
+			}
+
+			attachments = append(attachments, at)
 		default:
 			return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, fmt.Errorf("Unknown multipart/mixed nested mime type: %s", contentType)
 		}
+	}
+
+	return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
+}
+
+func parseMultipartSigned(msg io.Reader, boundary string) (textBody, htmlBody string, attachments []Attachment, embeddedFiles []EmbeddedFile, embeddedEmails []Email, err error) {
+	// vars
+	err = nil
+	var part *multipart.Part
+	var contentType string
+	var params map[string]string
+
+	// reader
+	mr := multipart.NewReader(msg, boundary)
+
+mrparts:
+	for {
+		part, err = mr.NextPart()
+		if err == io.EOF {
+			err = nil
+			break
+		} else if err != nil {
+			return
+		}
+
+		contentType, params, err = mime.ParseMediaType(part.Header.Get("Content-Type"))
+		if err != nil {
+			return
+		}
+
+		switch contentType {
+		case contentTypeMultipartMixed:
+			if textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err = parseMultipartMixed(part, params["boundary"]); err != nil {
+				break mrparts
+			}
+		case contentTypeMultipartAlternative:
+			if textBody, htmlBody, embeddedFiles, err = parseMultipartAlternative(part, params["boundary"]); err != nil {
+				break mrparts
+			}
+		case isAttachmentAsString(contentType, part):
+			at, err := decodeAttachment(part)
+			if err != nil {
+				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
+			}
+
+			attachments = append(attachments, at)
+		default:
+			err = fmt.Errorf("Unknown multipart/mixed nested mime type: %s", contentType)
+			return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
+		}
+
 	}
 
 	return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
@@ -377,6 +440,13 @@ func decodeMimeSentence(s string) string {
 	}
 
 	return strings.Join(result, "")
+}
+
+func isAttachmentAsString(contentType string, part *multipart.Part) string {
+	if isAttachment(part) == true {
+		return contentType
+	}
+	return ""
 }
 
 func decodeHeaderMime(header mail.Header) (mail.Header, error) {
@@ -448,16 +518,14 @@ func decodeContent(content io.Reader, encoding string) (io.Reader, error) {
 			return nil, err
 		}
 		return bytes.NewReader(b), nil
-	case "7bit":
+	case "7bit", "8bit", "binary":
 		dd, err := ioutil.ReadAll(content)
 		if err != nil {
 			return nil, err
 		}
 
 		return bytes.NewReader(dd), nil
-	case "8bit":
-		return content, nil
-	case "binary", "":
+	case "":
 		return content, nil
 	default:
 		return nil, fmt.Errorf("unknown encoding: %s", encoding)

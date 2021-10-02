@@ -428,12 +428,44 @@ So, "Hello".`,
 			htmlBody:  "<div dir=\"ltr\">👍</div>",
 			textBody:  "👍",
 		},
+		15: {
+			mailData: multipartSignedExample,
+			from: []mail.Address{
+				{
+					Name:    "John Doe",
+					Address: "jdoe@machine.example",
+				},
+			},
+			sender: mail.Address{
+				Name:    "Michael Jones",
+				Address: "mjones@machine.example",
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@example.net",
+				},
+			},
+			messageID:   "1234@local.machine.example",
+			date:        parseDate("Fri, 21 Nov 1997 09:55:06 -0600"),
+			subject:     "Multipart/Signed Mail",
+			contentType: "multipart/signed; micalg=\"sha-256\"; protocol=\"application/pkcs7-signature\"; boundary=\"=-qEPtUjpmMQEwviXs/uAF\"",
+			htmlBody:    "<html><head></head><body style=\"word-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;\"><div>A strange mail</div><div><span></span></div></body></html>",
+			textBody:    "A strange mail",
+			attachments: []attachmentData{
+				{
+					filename:    "smime.p7s",
+					contentType: "application/pkcs7-signature",
+					data:        "data\n",
+				},
+			},
+		},
 	}
 
 	for index, td := range testData {
 		e, err := Parse(strings.NewReader(td.mailData))
 		if err != nil {
-			t.Error(err)
+			t.Errorf("[Test Case %v] Error occured %s", index, err)
 		}
 
 		if td.contentType != e.ContentType {
@@ -989,4 +1021,34 @@ Content-Type: text/html; charset="UTF-8"
 Content-Transfer-Encoding: base64
 PGRpdiBkaXI9Imx0ciI+8J+RjTwvZGl2Pgo=
 --000000000000ab2e1f05a26de586--
+`
+
+var multipartSignedExample = `MIME-Version: 1.0
+From: John Doe <jdoe@machine.example>
+Sender: Michael Jones <mjones@machine.example>
+To: Mary Smith <mary@example.net>
+Message-ID: <1234@local.machine.example>
+Subject: Multipart/Signed Mail
+Content-Type: multipart/signed; micalg="sha-256"; protocol="application/pkcs7-signature";
+    boundary="=-qEPtUjpmMQEwviXs/uAF"
+User-Agent: Evolution 3.38.4 
+Date: Fri, 21 Nov 1997 09:55:06 -0600
+X-Evolution-Source: b3da4551047fb9d8754f4a75ca595ea448b9dcb1
+--=-qEPtUjpmMQEwviXs/uAF
+Content-Type: multipart/alternative; boundary="=-8pdwW9TQhAvOhHeSXkVG"
+--=-8pdwW9TQhAvOhHeSXkVG
+Content-Type: text/plain
+Content-Transfer-Encoding: quoted-printable
+A strange mail
+--=-8pdwW9TQhAvOhHeSXkVG
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+<html><head></head><body style=3D"word-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;"><div>A strange mail</div><div><span></span></div></body></html>
+--=-8pdwW9TQhAvOhHeSXkVG--
+--=-qEPtUjpmMQEwviXs/uAF
+Content-Type: application/pkcs7-signature; name="smime.p7s"
+Content-Disposition: attachment; filename="smime.p7s"
+Content-Transfer-Encoding: base64
+ZGF0YQo=
+--=-qEPtUjpmMQEwviXs/uAF--
 `
