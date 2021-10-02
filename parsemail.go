@@ -498,7 +498,17 @@ func decodeAttachment(part *multipart.Part) (at Attachment, err error) {
 }
 
 func decodeEmbeddedMail(part *multipart.Part) (at Attachment, err error) {
-	filename := decodeMimeSentence(part.FileName())
+	msg, err := mail.ReadMessage(part)
+	if err != nil {
+		return
+	}
+
+	email, err := createEmailFromHeader(msg.Header)
+	if err != nil {
+		return
+	}
+
+	filename := decodeMimeSentence(fmt.Sprintf("%s.eml", email.Subject))
 	decoded, err := decodeContent(part, part.Header.Get("Content-Transfer-Encoding"))
 	if err != nil {
 		return
