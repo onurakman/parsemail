@@ -312,17 +312,18 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 			attachments = append(attachments, at)
 		}
 
-		if contentType == contentTypeMultipartAlternative {
+		switch contentType {
+		case contentTypeMultipartAlternative:
 			textBody, htmlBody, embeddedFiles, err = parseMultipartAlternative(part, params["boundary"])
 			if err != nil {
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 			}
-		} else if contentType == contentTypeMultipartRelated {
+		case contentTypeMultipartRelated:
 			textBody, htmlBody, embeddedFiles, err = parseMultipartRelated(part, params["boundary"])
 			if err != nil {
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 			}
-		} else if contentType == contentTypeTextPlain {
+		case contentTypeTextPlain:
 			decoded, err := decodeContent(part, part.Header.Get("Content-Transfer-Encoding"))
 			if err != nil {
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
@@ -332,7 +333,7 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 			}
 			textBody += strings.TrimSuffix(string(ppContent[:]), "\n")
-		} else if contentType == contentTypeTextHtml {
+		case contentTypeTextHtml:
 			decoded, err := decodeContent(part, part.Header.Get("Content-Transfer-Encoding"))
 			if err != nil {
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
@@ -342,14 +343,14 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 			}
 			htmlBody += strings.TrimSuffix(string(ppContent[:]), "\n")
-		} else if contentType == contentTypeEncapsulatedMessage {
+		case contentTypeEncapsulatedMessage:
 			// message/rfc822
 			email, err := Parse(part)
 			if err != nil {
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 			}
 			embeddedEmails = append(embeddedEmails, email)
-		} else {
+		default:
 			return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, fmt.Errorf("Unknown multipart/mixed nested mime type: %s", contentType)
 		}
 	}
