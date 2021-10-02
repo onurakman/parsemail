@@ -309,14 +309,6 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 			return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 		}
 
-		if isAttachment(part) {
-			at, err := decodeAttachment(part)
-			if err != nil {
-				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
-			}
-			attachments = append(attachments, at)
-		}
-
 		switch contentType {
 		case contentTypeMultipartAlternative:
 			textBody, htmlBody, embeddedFiles, err = parseMultipartAlternative(part, params["boundary"])
@@ -402,6 +394,10 @@ mrparts:
 			}
 		case contentTypeMultipartAlternative:
 			if textBody, htmlBody, embeddedFiles, err = parseMultipartAlternative(part, params["boundary"]); err != nil {
+				break mrparts
+			}
+		case contentTypeMultipartRelated:
+			if textBody, htmlBody, embeddedFiles, err = parseMultipartRelated(part, params["boundary"]); err != nil {
 				break mrparts
 			}
 		case isAttachmentAsString(contentType, part):
