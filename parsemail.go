@@ -293,7 +293,7 @@ func parseMultipartAlternative(msg io.Reader, boundary string) (textBody, htmlBo
 	return textBody, htmlBody, embeddedFiles, err
 }
 
-func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody string, attachments []Attachment, embeddedFiles []EmbeddedFile, embeddedEmails []Email, err error) {
+func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody string, attachments []Attachment, embeddedFiles []EmbeddedFile, embeddedEmails []Attachment, err error) {
 	mr := multipart.NewReader(msg, boundary)
 	for {
 		part, err := mr.NextPart()
@@ -342,7 +342,7 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 			htmlBody += strings.TrimSuffix(string(ppContent[:]), "\n")
 		case contentTypeEncapsulatedMessage:
 			// message/rfc822
-			email, err := Parse(part)
+			email, err := decodeEmbeddedMail(part)
 			if err != nil {
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 			}
@@ -362,7 +362,7 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 	return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 }
 
-func parseMultipartSigned(msg io.Reader, boundary string) (textBody, htmlBody string, attachments []Attachment, embeddedFiles []EmbeddedFile, embeddedEmails []Email, err error) {
+func parseMultipartSigned(msg io.Reader, boundary string) (textBody, htmlBody string, attachments []Attachment, embeddedFiles []EmbeddedFile, embeddedEmails []Attachment, err error) {
 	// vars
 	err = nil
 	var part *multipart.Part
@@ -474,7 +474,7 @@ func decodeEmbeddedFile(part *multipart.Part) (ef EmbeddedFile, err error) {
 
 	ef.CID = strings.Trim(cid, "<>")
 	ef.Data = decoded
-	ef.ContentType = part.Header.Get("Content-Type")
+	ef.ContentType = strings.Split(part.Header.Get("Content-Type"), ";")[0]
 
 	return
 }
@@ -497,6 +497,20 @@ func decodeAttachment(part *multipart.Part) (at Attachment, err error) {
 	return
 }
 
+func decodeEmbeddedMail(part *multipart.Part) (at Attachment, err error) {
+	filename := decodeMimeSentence(part.FileName())
+	decoded, err := decodeContent(part, part.Header.Get("Content-Transfer-Encoding"))
+	if err != nil {
+		return
+	}
+
+	at.Filename = filename
+	at.Data = decoded
+	at.ContentType = strings.Split(part.Header.Get("Content-Type"), ";")[0]
+
+	return
+}
+
 func decodeContent(content io.Reader, encoding string) (io.Reader, error) {
 	switch strings.ToLower(encoding) {
 	case "base64":
@@ -505,7 +519,6 @@ func decodeContent(content io.Reader, encoding string) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		return bytes.NewReader(b), nil
 	case "quoted-printable":
 		decoded := quotedprintable.NewReader(content)
@@ -519,7 +532,6 @@ func decodeContent(content io.Reader, encoding string) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-
 		return bytes.NewReader(dd), nil
 	case "":
 		return content, nil
@@ -540,7 +552,6 @@ func (hp headerParser) parseAddress(s string) (ma *mail.Address) {
 
 	if strings.Trim(s, " \n") != "" {
 		ma, hp.err = mail.ParseAddress(s)
-
 		return ma
 	}
 
@@ -650,5 +661,5 @@ type Email struct {
 
 	Attachments    []Attachment
 	EmbeddedFiles  []EmbeddedFile
-	EmbeddedEmails []Email
+	EmbeddedEmails []Attachment
 }
