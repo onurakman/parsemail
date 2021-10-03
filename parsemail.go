@@ -58,29 +58,9 @@ func Parse(r io.Reader) (email Email, err error) {
 		email.TextBody, email.HTMLBody, email.Attachments, email.EmbeddedFiles, email.EmbeddedEmails, err = parseMultipartSigned(msg.Body, params["boundary"])
 	case contentTypeTextPlain:
 		message, _ := ioutil.ReadAll(msg.Body)
-		var reader io.Reader
-		reader, err = decodeContent(strings.NewReader(string(message[:])), msg.Header.Get("Content-Transfer-Encoding"))
-		if err != nil {
-			return
-		}
-
-		message, err = ioutil.ReadAll(reader)
-		if err != nil {
-			return
-		}
 		email.TextBody = strings.TrimSuffix(string(message[:]), "\n")
 	case contentTypeTextHtml:
 		message, _ := ioutil.ReadAll(msg.Body)
-		var reader io.Reader
-		reader, err = decodeContent(strings.NewReader(string(message[:])), msg.Header.Get("Content-Transfer-Encoding"))
-		if err != nil {
-			return
-		}
-
-		message, err = ioutil.ReadAll(reader)
-		if err != nil {
-			return
-		}
 		email.HTMLBody = strings.TrimSuffix(string(message[:]), "\n")
 	case contentTypeOctetStream:
 		email.Attachments, err = parseAttachmentOnlyEmail(msg.Body, msg.Header)
