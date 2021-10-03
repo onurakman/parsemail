@@ -2,6 +2,7 @@ package parsemail
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"net/mail"
 	"strings"
@@ -41,6 +42,425 @@ func TestParseEmail(t *testing.T) {
 		headerCheck     func(mail.Header, *testing.T)
 	}{
 		1: {
+			mailData: rfc5322exampleA11,
+			subject:  "Saying Hello",
+			from: []mail.Address{
+				{
+					Name:    "John Doe",
+					Address: "jdoe@machine.example",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@example.net",
+				},
+			},
+			sender: mail.Address{
+				Name:    "Michael Jones",
+				Address: "mjones@machine.example",
+			},
+			messageID: "1234@local.machine.example",
+			date:      parseDate("Fri, 21 Nov 1997 09:55:06 -0600"),
+			textBody: `This is a message just to say hello.
+So, "Hello".`,
+		},
+		2: {
+			mailData: rfc5322exampleA12,
+			from: []mail.Address{
+				{
+					Name:    "Joe Q. Public",
+					Address: "john.q.public@example.com",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@x.test",
+				},
+				{
+					Name:    "",
+					Address: "jdoe@example.org",
+				},
+				{
+					Name:    "Who?",
+					Address: "one@y.test",
+				},
+			},
+			cc: []mail.Address{
+				{
+					Name:    "",
+					Address: "boss@nil.test",
+				},
+				{
+					Name:    "Giant; \"Big\" Box",
+					Address: "sysservices@example.net",
+				},
+			},
+			messageID: "5678.21-Nov-1997@example.com",
+			date:      parseDate("Tue, 01 Jul 2003 10:52:37 +0200"),
+			textBody:  `Hi everyone.`,
+		},
+		3: {
+			mailData: rfc5322exampleA2a,
+			subject:  "Re: Saying Hello",
+			from: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@example.net",
+				},
+			},
+			replyTo: []mail.Address{
+				{
+					Name:    "Mary Smith: Personal Account",
+					Address: "smith@home.example",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "John Doe",
+					Address: "jdoe@machine.example",
+				},
+			},
+			messageID:  "3456@example.net",
+			inReplyTo:  []string{"1234@local.machine.example"},
+			references: []string{"1234@local.machine.example"},
+			date:       parseDate("Fri, 21 Nov 1997 10:01:10 -0600"),
+			textBody:   `This is a reply to your hello.`,
+		},
+		4: {
+			mailData: rfc5322exampleA2b,
+			subject:  "Re: Saying Hello",
+			from: []mail.Address{
+				{
+					Name:    "John Doe",
+					Address: "jdoe@machine.example",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith: Personal Account",
+					Address: "smith@home.example",
+				},
+			},
+			messageID:  "abcd.1234@local.machine.test",
+			inReplyTo:  []string{"3456@example.net"},
+			references: []string{"1234@local.machine.example", "3456@example.net"},
+			date:       parseDate("Fri, 21 Nov 1997 11:00:00 -0600"),
+			textBody:   `This is a reply to your reply.`,
+		},
+		5: {
+			mailData: rfc5322exampleA3,
+			subject:  "Saying Hello",
+			from: []mail.Address{
+				{
+					Name:    "John Doe",
+					Address: "jdoe@machine.example",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@example.net",
+				},
+			},
+			messageID: "1234@local.machine.example",
+			date:      parseDate("Fri, 21 Nov 1997 09:55:06 -0600"),
+			resentFrom: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@example.net",
+				},
+			},
+			resentTo: []mail.Address{
+				{
+					Name:    "Jane Brown",
+					Address: "j-brown@other.example",
+				},
+			},
+			resentMessageID: "78910@example.net",
+			resentDate:      parseDate("Mon, 24 Nov 1997 14:22:01 -0800"),
+			textBody: `This is a message just to say hello.
+So, "Hello".`,
+		},
+		6: {
+			mailData:    data1,
+			contentType: `multipart/mixed; boundary=f403045f1dcc043a44054c8e6bbf`,
+			content:     "",
+			subject:     "Peter Paholík",
+			from: []mail.Address{
+				{
+					Name:    "Peter Paholík",
+					Address: "peter.paholik@gmail.com",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "",
+					Address: "dusan@kasan.sk",
+				},
+			},
+			messageID: "CACtgX4kNXE7T5XKSKeH_zEcfUUmf2vXVASxYjaaK9cCn-3zb_g@mail.gmail.com",
+			date:      parseDate("Fri, 07 Apr 2017 09:17:26 +0200"),
+			htmlBody:  "<div dir=\"ltr\"><br></div>",
+			attachments: []attachmentData{
+				{
+					filename:    "Peter Paholík 1 4 2017 2017-04-07.json",
+					contentType: "application/json",
+					data:        "[1, 2, 3]",
+				},
+			},
+		},
+		7: {
+			mailData:    data2,
+			contentType: `multipart/alternative; boundary="------------C70C0458A558E585ACB75FB4"`,
+			content:     "",
+			subject:     "Re: Test Subject 2",
+			from: []mail.Address{
+				{
+					Name:    "Sender Man",
+					Address: "sender@domain.com",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "",
+					Address: "info@receiver.com",
+				},
+			},
+			cc: []mail.Address{
+				{
+					Name:    "Cc Man",
+					Address: "ccman@gmail.com",
+				},
+			},
+			messageID:  "0e9a21b4-01dc-e5c1-dcd6-58ce5aa61f4f@receiver.com",
+			inReplyTo:  []string{"9ff38d03-c4ab-89b7-9328-e99d5e24e3ba@receiver.eu"},
+			references: []string{"2f6b7595-c01e-46e5-42bc-f263e1c4282d@receiver.com", "9ff38d03-c4ab-89b7-9328-e99d5e24e3ba@domain.com"},
+			date:       parseDate("Fri, 07 Apr 2017 12:59:55 +0200"),
+			htmlBody:   `<html>data<img src="part2.9599C449.04E5EC81@develhell.com"/></html>`,
+			textBody: `First level
+> Second level
+>> Third level
+>
+`,
+			embeddedFiles: []embeddedFileData{
+				{
+					cid:         "part2.9599C449.04E5EC81@develhell.com",
+					contentType: "image/png",
+					base64data:  "iVBORw0KGgoAAAANSUhEUgAAAQEAAAAYCAIAAAB1IN9NAAAACXBIWXMAAAsTAAALEwEAmpwYYKUKF+Os3baUndC0pDnwNAmLy1SUr2Gw0luxQuV/AwC6cEhVV5VRrwAAAABJRU5ErkJggg==",
+				},
+			},
+		},
+		8: {
+			mailData: imageContentExample,
+			subject:  "Saying Hello",
+			from: []mail.Address{
+				{
+					Name:    "John Doe",
+					Address: "jdoe@machine.example",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@example.net",
+				},
+			},
+			sender: mail.Address{
+				Name:    "Michael Jones",
+				Address: "mjones@machine.example",
+			},
+			messageID:   "1234@local.machine.example",
+			date:        parseDate("Fri, 21 Nov 1997 09:55:06 -0600"),
+			contentType: `image/jpeg; x-unix-mode=0644; name="image.gif"`,
+			content: `GIF89a;`,
+		},
+		9: {
+			contentType: `multipart/mixed; boundary="0000000000007e2bb40587e36196"`,
+			mailData:    textPlainInMultipart,
+			subject:     "Re: kern/54143 (virtualbox)",
+			from: []mail.Address{
+				{
+					Name:    "Rares",
+					Address: "rares@example.com",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "",
+					Address: "bugs@example.com",
+				},
+			},
+			date:     parseDate("Fri, 02 May 2019 11:25:35 +0300"),
+			textBody: `plain text part`,
+		},
+		10: {
+			contentType: `multipart/mixed; boundary="0000000000007e2bb40587e36196"`,
+			mailData:    textHTMLInMultipart,
+			subject:     "Re: kern/54143 (virtualbox)",
+			from: []mail.Address{
+				{
+					Name:    "Rares",
+					Address: "rares@example.com",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "",
+					Address: "bugs@example.com",
+				},
+			},
+			date:     parseDate("Fri, 02 May 2019 11:25:35 +0300"),
+			textBody: ``,
+			htmlBody: "<div dir=\"ltr\"><div>html text part</div><div><br></div><div><br><br></div></div>",
+		},
+		11: {
+			mailData: rfc5322exampleA12WithTimezone,
+			from: []mail.Address{
+				{
+					Name:    "Joe Q. Public",
+					Address: "john.q.public@example.com",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@x.test",
+				},
+				{
+					Name:    "",
+					Address: "jdoe@example.org",
+				},
+				{
+					Name:    "Who?",
+					Address: "one@y.test",
+				},
+			},
+			cc: []mail.Address{
+				{
+					Name:    "",
+					Address: "boss@nil.test",
+				},
+				{
+					Name:    "Giant; \"Big\" Box",
+					Address: "sysservices@example.net",
+				},
+			},
+			messageID: "5678.21-Nov-1997@example.com",
+			date:      parseDate("Tue, 01 Jul 2003 10:52:37 +0200"),
+			textBody:  `Hi everyone.`,
+		},
+		12: {
+			contentType: "multipart/mixed; boundary=f403045f1dcc043a44054c8e6bbf",
+			mailData:    attachment7bit,
+			subject:     "Peter Foobar",
+			from: []mail.Address{
+				{
+					Name:    "Peter Foobar",
+					Address: "peter.foobar@gmail.com",
+				},
+			},
+			to: []mail.Address{
+				{
+					Name:    "",
+					Address: "dusan@kasan.sk",
+				},
+			},
+			messageID: "CACtgX4kNXE7T5XKSKeH_zEcfUUmf2vXVASxYjaaK9cCn-3zb_g@mail.gmail.com",
+			date:      parseDate("Tue, 02 Apr 2019 11:12:26 +0000"),
+			htmlBody:  "<div dir=\"ltr\"><br></div>",
+			attachments: []attachmentData{
+				{
+					filename:    "unencoded.csv",
+					contentType: "application/csv",
+					data:        fmt.Sprintf("\n"+`"%s", "%s", "%s", "%s", "%s"`+"\n"+`"%s", "%s", "%s", "%s", "%s"`+"\n", "Some", "Data", "In", "Csv", "Format", "Foo", "Bar", "Baz", "Bum", "Poo"),
+				},
+			},
+		},
+		13: {
+			contentType: "multipart/related; boundary=\"000000000000ab2e2205a26de587\"",
+			mailData:    multipartRelatedExample,
+			subject:     "Saying Hello",
+			from: []mail.Address{
+				{
+					Name:    "John Doe",
+					Address: "jdoe@machine.example",
+				},
+			},
+			sender: mail.Address{
+				Name:    "Michael Jones",
+				Address: "mjones@machine.example",
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@example.net",
+				},
+			},
+			messageID: "1234@local.machine.example",
+			date:      parseDate("Fri, 21 Nov 1997 09:55:06 -0600"),
+			htmlBody:  "<div dir=\"ltr\"><div>Time for the egg.</div><div><br></div><div><br><br></div></div>",
+			textBody:  "Time for the egg.",
+		},
+		14: {
+			contentType: "multipart/alternative; boundary=\"000000000000ab2e1f05a26de586\"",
+			mailData:    base64Content,
+			subject:     "Saying Hello",
+			from: []mail.Address{
+				{
+					Name:    "John Doe",
+					Address: "jdoe@machine.example",
+				},
+			},
+			sender: mail.Address{
+				Name:    "Michael Jones",
+				Address: "mjones@machine.example",
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@example.net",
+				},
+			},
+			messageID: "1234@local.machine.example",
+			date:      parseDate("Fri, 21 Nov 1997 09:55:06 -0600"),
+			htmlBody:  "<div dir=\"ltr\">👍</div>",
+			textBody:  "👍",
+		},
+		15: {
+			mailData: multipartSignedExample,
+			from: []mail.Address{
+				{
+					Name:    "John Doe",
+					Address: "jdoe@machine.example",
+				},
+			},
+			sender: mail.Address{
+				Name:    "Michael Jones",
+				Address: "mjones@machine.example",
+			},
+			to: []mail.Address{
+				{
+					Name:    "Mary Smith",
+					Address: "mary@example.net",
+				},
+			},
+			messageID:   "1234@local.machine.example",
+			date:        parseDate("Fri, 21 Nov 1997 09:55:06 -0600"),
+			subject:     "Multipart/Signed Mail",
+			contentType: "multipart/signed; micalg=\"sha-256\"; protocol=\"application/pkcs7-signature\"; boundary=\"=-qEPtUjpmMQEwviXs/uAF\"",
+			htmlBody:    "<html><head></head><body style=\"word-wrap: break-word; -webkit-nbsp-mode: space; line-break: after-white-space;\"><div>A strange mail</div><div><span></span></div></body></html>",
+			textBody:    "A strange mail",
+			attachments: []attachmentData{
+				{
+					filename:    "smime.p7s",
+					contentType: "application/pkcs7-signature",
+					data:        "data\n",
+				},
+			},
+		},
+		16: {
 			mailData:    trTest,
 			contentType: `multipart/mixed; boundary=f403045f1dcc043a44054c8e6bbf`,
 			content:     "",

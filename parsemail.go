@@ -47,6 +47,16 @@ func Parse(r io.Reader) (email Email, err error) {
 		return
 	}
 
+	if strings.HasPrefix(contentType, "text/") {
+		if ch, ok := params["charset"]; ok {
+			if converted, charsetErr := charsetReader(ch, msg.Body); charsetErr != nil {
+				err = UnknownCharsetError{charsetErr}
+			} else {
+				msg.Body = converted
+			}
+		}
+	}
+
 	switch contentType {
 	case contentTypeMultipartMixed:
 		email.TextBody, email.HTMLBody, email.Attachments, email.EmbeddedFiles, email.EmbeddedEmails, err = parseMultipartMixed(msg.Body, params["boundary"])
@@ -186,6 +196,13 @@ func parseMultipartRelated(msg io.Reader, boundary string) (textBody, htmlBody s
 				return textBody, htmlBody, embeddedFiles, err
 			}
 
+			if ch, ok := params["charset"]; ok {
+				rd, err := Reader(ch, reader)
+				if err == nil {
+					reader = rd
+				}
+			}
+
 			ppContent, err := ioutil.ReadAll(reader)
 			if err != nil {
 				return textBody, htmlBody, embeddedFiles, err
@@ -194,9 +211,17 @@ func parseMultipartRelated(msg io.Reader, boundary string) (textBody, htmlBody s
 			textBody += strings.TrimSuffix(string(ppContent[:]), "\n")
 		case contentTypeTextHtml:
 			message, _ := ioutil.ReadAll(part)
+
 			reader, err := decodeContent(strings.NewReader(string(message[:])), part.Header.Get("Content-Transfer-Encoding"))
 			if err != nil {
 				return textBody, htmlBody, embeddedFiles, err
+			}
+
+			if ch, ok := params["charset"]; ok {
+				rd, err := Reader(ch, reader)
+				if err == nil {
+					reader = rd
+				}
 			}
 
 			ppContent, err := ioutil.ReadAll(reader)
@@ -234,7 +259,7 @@ func parseMultipartRelated(msg io.Reader, boundary string) (textBody, htmlBody s
 func parseMultipartAlternative(msg io.Reader, boundary string) (textBody, htmlBody string, embeddedFiles []EmbeddedFile, err error) {
 	pmr := multipart.NewReader(msg, boundary)
 	for {
-		part, err := pmr.NextPart()
+		part, err := pmr.NextRawPart()
 
 		if err == io.EOF {
 			break
@@ -255,6 +280,13 @@ func parseMultipartAlternative(msg io.Reader, boundary string) (textBody, htmlBo
 				return textBody, htmlBody, embeddedFiles, err
 			}
 
+			if ch, ok := params["charset"]; ok {
+				rd, err := Reader(ch, reader)
+				if err == nil {
+					reader = rd
+				}
+			}
+
 			ppContent, err := ioutil.ReadAll(reader)
 			if err != nil {
 				return textBody, htmlBody, embeddedFiles, err
@@ -263,9 +295,17 @@ func parseMultipartAlternative(msg io.Reader, boundary string) (textBody, htmlBo
 			textBody += strings.TrimSuffix(string(ppContent[:]), "\n")
 		case contentTypeTextHtml:
 			message, _ := ioutil.ReadAll(part)
+
 			reader, err := decodeContent(strings.NewReader(string(message[:])), part.Header.Get("Content-Transfer-Encoding"))
 			if err != nil {
 				return textBody, htmlBody, embeddedFiles, err
+			}
+
+			if ch, ok := params["charset"]; ok {
+				rd, err := Reader(ch, reader)
+				if err == nil {
+					reader = rd
+				}
 			}
 
 			ppContent, err := ioutil.ReadAll(reader)
@@ -334,6 +374,13 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
 			}
 
+			if ch, ok := params["charset"]; ok {
+				rd, err := Reader(ch, reader)
+				if err == nil {
+					reader = rd
+				}
+			}
+
 			ppContent, err := ioutil.ReadAll(reader)
 			if err != nil {
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
@@ -342,9 +389,17 @@ func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody str
 			textBody += strings.TrimSuffix(string(ppContent[:]), "\n")
 		case contentTypeTextHtml:
 			message, _ := ioutil.ReadAll(part)
+
 			reader, err := decodeContent(strings.NewReader(string(message[:])), part.Header.Get("Content-Transfer-Encoding"))
 			if err != nil {
 				return textBody, htmlBody, attachments, embeddedFiles, embeddedEmails, err
+			}
+
+			if ch, ok := params["charset"]; ok {
+				rd, err := Reader(ch, reader)
+				if err == nil {
+					reader = rd
+				}
 			}
 
 			ppContent, err := ioutil.ReadAll(reader)
@@ -387,7 +442,7 @@ func parseMultipartSigned(msg io.Reader, boundary string) (textBody, htmlBody st
 
 mrparts:
 	for {
-		part, err = mr.NextPart()
+		part, err = mr.NextRawPart()
 		if err == io.EOF {
 			err = nil
 			break
