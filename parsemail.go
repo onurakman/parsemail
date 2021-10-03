@@ -3,7 +3,12 @@ package parsemail
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/htmlindex"
+	"golang.org/x/text/encoding/ianaindex"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -418,24 +423,12 @@ mrparts:
 }
 
 func decodeMimeSentence(s string) string {
-	result := []string{}
-	ss := strings.Split(s, " ")
-
-	for _, word := range ss {
-		dec := new(mime.WordDecoder)
-		w, err := dec.Decode(word)
-		if err != nil {
-			if len(result) == 0 {
-				w = word
-			} else {
-				w = " " + word
-			}
-		}
-
-		result = append(result, w)
+	dec := mime.WordDecoder{CharsetReader: charsetReader}
+	w, err := dec.DecodeHeader(s)
+	if err != nil {
+		return s
 	}
-
-	return strings.Join(result, "")
+	return w
 }
 
 func isAttachmentAsString(contentType string, part *multipart.Part) string {
@@ -672,4 +665,100 @@ type Email struct {
 	Attachments    []Attachment
 	EmbeddedFiles  []EmbeddedFile
 	EmbeddedEmails []Attachment
+}
+
+type UnknownCharsetError struct {
+	e error
+}
+
+func (u UnknownCharsetError) Unwrap() error { return u.e }
+
+func (u UnknownCharsetError) Error() string {
+	return "unknown charset: " + u.e.Error()
+}
+
+// IsUnknownCharset returns a boolean indicating whether the error is known to
+// report that the charset advertised by the entity is unknown.
+func IsUnknownCharset(err error) bool {
+	return errors.As(err, new(UnknownCharsetError))
+}
+
+// CharsetReader , if non-nil, defines a function to generate charset-conversion
+// readers, converting from the provided charset into UTF-8. Charsets are always
+// lower-case. utf-8 and us-ascii charsets are handled by default. One of the
+// CharsetReader's result values must be non-nil.
+//
+// Importing github.com/emersion/go-message/charset will set CharsetReader to
+// a function that handles most common charsets. Alternatively, CharsetReader
+// can be set to e.g. golang.org/x/net/html/charset.NewReaderLabel.
+var CharsetReader func(charset string, input io.Reader) (io.Reader, error)
+
+// charsetReader calls CharsetReader if non-nil.
+func charsetReader(charset string, input io.Reader) (io.Reader, error) {
+	charset = strings.ToLower(charset)
+	if charset == "utf-8" || charset == "us-ascii" {
+		return input, nil
+	}
+	if CharsetReader != nil {
+		r, err := CharsetReader(charset, input)
+		if err != nil {
+			return r, UnknownCharsetError{err}
+		}
+		return r, nil
+	}
+	return input, UnknownCharsetError{fmt.Errorf("message: unhandled charset %q", charset)}
+}
+
+// decodeHeader decodes an internationalized header field. If it fails, it
+// returns the input string and the error.
+func decodeHeader(s string) (string, error) {
+	wordDecoder := mime.WordDecoder{CharsetReader: charsetReader}
+	dec, err := wordDecoder.DecodeHeader(s)
+	if err != nil {
+		return s, err
+	}
+	return dec, nil
+}
+
+func encodeHeader(s string) string {
+	return mime.QEncoding.Encode("utf-8", s)
+}
+
+var charsets = map[string]encoding.Encoding{
+	"ansi_x3.110-1983": charmap.ISO8859_1, // see RFC 1345 page 62, mostly superset of ISO 8859-1
+}
+
+func init() {
+	CharsetReader = Reader
+}
+
+// Reader returns an io.Reader that converts the provided charset to UTF-8.
+func Reader(charset string, input io.Reader) (io.Reader, error) {
+	var err error
+	enc, ok := charsets[strings.ToLower(charset)]
+	if ok && enc == nil {
+		return nil, fmt.Errorf("charset %q: charset is disabled", charset)
+	} else if !ok {
+		enc, err = ianaindex.MIME.Encoding(charset)
+	}
+	if enc == nil {
+		enc, err = ianaindex.MIME.Encoding("cs" + charset)
+	}
+	if enc == nil {
+		enc, err = htmlindex.Get(charset)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("charset %q: %v", charset, err)
+	}
+	// See https://github.com/golang/go/issues/19421
+	if enc == nil {
+		return nil, fmt.Errorf("charset %q: unsupported charset", charset)
+	}
+	return enc.NewDecoder().Reader(input), nil
+}
+
+// RegisterEncoding registers an encoding. This is intended to be called from
+// the init function in packages that want to support additional charsets.
+func RegisterEncoding(name string, enc encoding.Encoding) {
+	charsets[name] = enc
 }
