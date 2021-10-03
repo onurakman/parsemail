@@ -1107,12 +1107,12 @@ Content-Type: multipart/mixed; boundary=f403045f1dcc043a44054c8e6bbf
 Content-Type: multipart/alternative; boundary=f403045f1dcc043a3f054c8e6bbd
 
 --f403045f1dcc043a3f054c8e6bbd
-Content-Type: text/plain; charset=UTF-8
+Content-Type: text/plain; charset=ISO-8859-9
 
 
 
 --f403045f1dcc043a3f054c8e6bbd
-Content-Type: text/html; charset=UTF-8
+Content-Type: text/html; charset=ISO-8859-9
 
 <div dir="ltr">ÖÇŞİĞÜöçşığü<br></div>
 
