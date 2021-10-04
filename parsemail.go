@@ -343,7 +343,7 @@ func parseMultipartAlternative(msg io.Reader, boundary string) (textBody, htmlBo
 func parseMultipartMixed(msg io.Reader, boundary string) (textBody, htmlBody string, attachments []Attachment, embeddedFiles []EmbeddedFile, embeddedEmails []Attachment, err error) {
 	mr := multipart.NewReader(msg, boundary)
 	for {
-		part, err := mr.NextPart()
+		part, err := mr.NextRawPart()
 		if err == io.EOF {
 			err = nil
 			break
