@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	uuid "github.com/satori/go.uuid"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"golang.org/x/text/encoding/htmlindex"
@@ -554,25 +555,22 @@ func decodeAttachment(part *multipart.Part) (at Attachment, err error) {
 }
 
 func decodeEmbeddedMail(part *multipart.Part) (at Attachment, err error) {
-	msg, err := mail.ReadMessage(part)
+	filename := decodeMimeSentence(fmt.Sprintf("%s.eml", uuid.NewV4().String()))
+	decoded, err := decodeContent(part, part.Header.Get("Content-Transfer-Encoding"))
 	if err != nil {
 		return
 	}
-
-	email, err := createEmailFromHeader(msg.Header)
-	if err != nil {
-		return
-	}
-
-	filename := decodeMimeSentence(fmt.Sprintf("%s.eml", email.Subject))
-	decoded, err := decodeContent(msg.Body, msg.Header.Get("Content-Transfer-Encoding"))
-	if err != nil {
-		return
-	}
+	at.Data = decoded
 
 	at.Filename = filename
-	at.Data = decoded
-	at.ContentType = strings.Split(part.Header.Get("Content-Type"), ";")[0]
+	contentType, params, err := mime.ParseMediaType(part.Header.Get("Content-Type"))
+	if err != nil {
+		return
+	}
+	at.ContentType = contentType
+	if name, ok := params["name"]; ok {
+		at.Filename = fmt.Sprintf("%s.eml", name)
+	}
 
 	return
 }
