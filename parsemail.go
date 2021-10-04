@@ -565,7 +565,7 @@ func decodeEmbeddedMail(part *multipart.Part) (at Attachment, err error) {
 	}
 
 	filename := decodeMimeSentence(fmt.Sprintf("%s.eml", email.Subject))
-	decoded, err := decodeContent(part, part.Header.Get("Content-Transfer-Encoding"))
+	decoded, err := decodeContent(msg.Body, msg.Header.Get("Content-Transfer-Encoding"))
 	if err != nil {
 		return
 	}
