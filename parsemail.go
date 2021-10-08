@@ -75,6 +75,13 @@ func Parse(r io.Reader) (email Email, err error) {
 			return
 		}
 
+		if ch, ok := params["charset"]; ok {
+			rd, err := Reader(ch, reader)
+			if err == nil {
+				reader = rd
+			}
+		}
+
 		message, err = ioutil.ReadAll(reader)
 		if err != nil {
 			return
@@ -87,6 +94,13 @@ func Parse(r io.Reader) (email Email, err error) {
 		reader, err = decodeContent(strings.NewReader(string(message[:])), msg.Header.Get("Content-Transfer-Encoding"))
 		if err != nil {
 			return
+		}
+
+		if ch, ok := params["charset"]; ok {
+			rd, err := Reader(ch, reader)
+			if err == nil {
+				reader = rd
+			}
 		}
 
 		message, err = ioutil.ReadAll(reader)
